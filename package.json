@@ -10,7 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "bleno": "^0.5.0",
-    "serialport": "^7.1.4",
-    "xbee-api": "^0.6.0"
+    "serialport": "^7.1.4"
   }
 }

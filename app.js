@@ -1,29 +1,23 @@
 const bleno = require('bleno');
-const util = require('util');
 const SerialPort = require('serialport');
-const xbee_api = require('xbee-api');
+const ByteLength = require('@serialport/parser-byte-length');
 
-const C = xbee_api.constants;
 const COUNTER_SERVICE_UUID = "11111111-9FAB-43C8-9231-40F6E305F96D";
 const COUNTER_CHAR_UUID = "11111110-9FAB-43C8-9231-40F6E305F96D";
 
-// xbee code
-const xbeeAPI = new xbee_api.XBeeAPI({
-    api_mode: 1
-});
-
 // for raspberry pi 3 the serial port is: /dev/ttyS0
 const serialport = new SerialPort("/dev/ttyS0", {
-    baudRate: 9600, //Tiene que ser igual que en Xbee
-    parser: xbeeAPI.rawParser()
+    baudRate: 9600 //it has to be the arduino baudRate
 });
+const parser = serialport.pipe(new ByteLength({length: 2}));
+
 
 // bluetooth code
 class CounterCharacteristic extends bleno.Characteristic {
     constructor() {
         super({
             uuid: COUNTER_CHAR_UUID,
-            properties: ["notify"],
+            properties: ['notify'],
             value: null
         });
 
@@ -31,7 +25,6 @@ class CounterCharacteristic extends bleno.Characteristic {
     }
 
     onSubscribe(maxValueSize, updateValueCallback) {
-        console.log(`Counter subscribed, max value size is ${maxValueSize}`);
         this.updateValueCallback = updateValueCallback;
     }
 
@@ -41,51 +34,27 @@ class CounterCharacteristic extends bleno.Characteristic {
     }    
 
     sendNotification(value) {
-        console.log(this.updateValueCallback);
         if(this.updateValueCallback) {
             console.log(`Sending notification with value ${value}`);
 
             let notificationBytes = Buffer.alloc(4);
 
             notificationBytes.writeInt32LE(value);
-            
-
             this.updateValueCallback(notificationBytes);
         }
     }
-
-    // esto es para hacer pruebas con la raspberry y la app, sin el nodemcu
-
-    // start() {
-    //     console.log("Starting counter");
-    //     this.handle = setInterval(() => {
-    //         if (this.counter > 100) {
-    //             this.counter = 0;
-    //         }
-    //         this.counter += 1;
-    //         this.sendNotification(this.counter);
-    //     }, 1000);
-    // }
-
-    // stop() {
-    //     console.log("Stopping counter");
-    //     clearInterval(this.handle);
-    //     this.handle = null;
-    // }
 }
 
 let counter = new CounterCharacteristic();
-//counter.start();
 
-serialport.on('data', (buffer) => {
+parser.on('data', (buffer) => { 
     if (counter.updateValueCallback) {
         let data = new Int8Array(buffer);
+        let number = (data[0] * 128) + data[1];
         
-        counter.sendNotification(data[0]);
-        console.log(`value: ${data[0]}`);    
+        counter.sendNotification(number);   
     }
 });
-
 
 bleno.on("stateChange", state => {
 
@@ -97,17 +66,13 @@ bleno.on("stateChange", state => {
 
     } else {
         console.log("Stopping...");
-        //counter.stop();
         bleno.stopAdvertising();
     }        
 });
 
 bleno.on("advertisingStart", err => {
 
-    console.log("Configuring services...");
-    
     if(err) {
-        console.error(err);
         return;
     }
 
@@ -123,29 +88,3 @@ bleno.on("advertisingStart", err => {
             console.log("Services configured");
     });
 });
-
-
-bleno.on('advertisingStartError', (error) => {
-    console.log('advertisingStartError: ', error);
-});
-
-bleno.on('advertisingStop', () => {
-    console.log('advertisingStop');
-});
-bleno.on('servicesSet', (error) => {
-    console.log('servicesSet', error);
-});
-
-bleno.on('servicesSetError', (error) => {
-    console.log('servicesSetError', error);
-});
-bleno.on('accept', (clientAddress) => {
-    console.log('accept', clientAddress);
-    clientConnected = clientAddress;
-}); // not available on OS X 10.9
-bleno.on('disconnect', (clientAddress) => {
-    console.log('disconnect', clientAddress);
-}); // Linux only
-bleno.on('rssiUpdate', (rssi) => {
-    console.log('rssiUpdate', rssi);
-}); // not available on OS X 10.9
